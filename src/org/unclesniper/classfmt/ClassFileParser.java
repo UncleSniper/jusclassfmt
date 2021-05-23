@@ -104,6 +104,15 @@ public class ClassFileParser {
 
 	}
 
+	private static final boolean DEBUG;
+
+	static {
+		String prop = System.getProperty("org.unclesniper.classfmt.ClassFileParser.debug");
+		DEBUG = prop != null && Boolean.parseBoolean(prop);
+	}
+
+	private static final char[] ZEROES = "0000000".toCharArray();
+
 	private ClassFileSink sink;
 
 	private Expected expected;
@@ -280,6 +289,10 @@ public class ClassFileParser {
 	}
 
 	private void foundByte(byte b) throws IOException, ClassFileFormatException {
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** ClassFileParser.foundByte(0x"
+					+ Integer.toHexString((b & 0xFF) | 0x100).substring(1).toUpperCase() + "), state = "
+					+ state.name());
 		switch(state) {
 			case BEFORE_CPOOL_TAG:
 				{
@@ -365,6 +378,10 @@ public class ClassFileParser {
 	}
 
 	private void foundShort(short s) throws IOException, ClassFileFormatException {
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** ClassFileParser.foundShort(0x"
+					+ Integer.toHexString((s & 0xFFFF) | 0x10000).substring(1).toUpperCase() + "), state = "
+					+ state.name());
 		switch(state) {
 			case BEFORE_MINOR:
 				short0 = s;
@@ -553,6 +570,10 @@ public class ClassFileParser {
 	}
 
 	private void foundInt(int i) throws IOException, ClassFileFormatException {
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** ClassFileParser.foundInt(0x"
+					+ Long.toHexString(((long)i & 0xFFFFFFFFL) | 0x100000000L).substring(1).toUpperCase()
+					+ "), state = " + state.name());
 		switch(state) {
 			case BEFORE_MAGIC:
 				if(i != 0xCAFEBABE)
@@ -584,6 +605,14 @@ public class ClassFileParser {
 	}
 
 	private void foundLong(long l) throws IOException, ClassFileFormatException {
+		if(ClassFileParser.DEBUG) {
+			String hex = Long.toHexString(l).toUpperCase();
+			int length = hex.length();
+			System.err.print("*** ClassFileParser.foundLong(0x");
+			if(length < 8)
+				System.err.print(String.valueOf(ClassFileParser.ZEROES, 0, 8 - length));
+			System.err.println(hex + "), state = " + state.name());
+		}
 		switch(state) {
 			case BEFORE_CPOOL_LONG_VALUE:
 				sink.constantLong(l);
@@ -601,6 +630,8 @@ public class ClassFileParser {
 	}
 
 	private void foundBytes(byte[] buffer, int offset, int length) throws IOException, ClassFileFormatException {
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** ClassFileParser.foundBytes(" + length + "), state = " + state.name());
 		switch(state) {
 			case IN_CPOOL_UTF8_BYTES:
 				foundMUTF8Bytes(buffer, offset, length);
@@ -647,8 +678,11 @@ public class ClassFileParser {
 			nextPoolConstant();
 			return;
 		}
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** entering ClassFileParser.foundMUTF8Bytes(" + length + "), int0 = " + int0
+					+ ", utf8State = " + utf8State.name());
 		int end = offset + length;
-		for(int i = offset; i < length; ++i) {
+		for(int i = offset; i < end; ++i) {
 			int b = buffer[i] & 0xFF;
 			switch(utf8State) {
 				case NONE:
@@ -683,6 +717,9 @@ public class ClassFileParser {
 					throw new Doom("Unrecognized UTF8State: " + utf8State.name());
 			}
 		}
+		if(ClassFileParser.DEBUG)
+			System.err.println("*** leaving ClassFileParser.foundMUTF8Bytes(" + length + "), int0 = " + int0
+					+ ", utf8State = " + utf8State.name());
 	}
 
 	private void reservePoolConstant() throws ReservedConstantPoolEntryAfterEndOfPoolClassFileFormatException {

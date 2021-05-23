@@ -206,7 +206,36 @@ public class DumpingClassFileSink extends StatefulClassFileSink {
 	protected void constantUTF8Impl(String value) throws IOException {
 		prepareConstant();
 		print("CONSTANT_Utf8_info: value = '");
-		print(value);
+		int length = value.length();
+		for(int i = 0; i < length; ++i) {
+			char c = value.charAt(i);
+			switch(c) {
+				case '\b':
+					print("\\b");
+					break;
+				case '\f':
+					print("\\f");
+					break;
+				case '\n':
+					print("\\n");
+					break;
+				case '\r':
+					print("\\r");
+					break;
+				case '\t':
+					print("\\t");
+					break;
+				default:
+					if(c >= ' ' && c <= '~')
+						print(c);
+					else {
+						int code = (int)c;
+						print("\\u");
+						print(Integer.toHexString(code | 0x10000).substring(1).toUpperCase());
+					}
+					break;
+			}
+		}
 		println('\'');
 		writer.flush();
 	}
