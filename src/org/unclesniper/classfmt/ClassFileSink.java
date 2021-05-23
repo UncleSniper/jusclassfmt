@@ -72,4 +72,13 @@ public interface ClassFileSink {
 
 	void endFields() throws IOException, ClassFileFormatException;
 
+	void beginMethods(int count) throws IOException, ClassFileFormatException;
+
+	void beginMethod(int accessFlags, int nameIndex, int descriptorIndex)
+			throws IOException, ClassFileFormatException;
+
+	void endMethod() throws IOException, ClassFileFormatException;
+
+	void endMethods() throws IOException, ClassFileFormatException;
+
 }

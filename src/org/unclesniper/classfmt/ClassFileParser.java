@@ -53,7 +53,19 @@ public class ClassFileParser {
 		BEFORE_FIELD_ATTRIBUTE_NAME,
 		BEFORE_FIELD_ATTRIBUTE_LENGTH,
 		IN_FIELD_ATTRIBUTE_BYTES,
-		BEFORE_METHODS_COUNT;
+		BEFORE_METHODS_COUNT,
+		BEFORE_METHOD_ACCESS_FLAGS,
+		BEFORE_METHOD_NAME,
+		BEFORE_METHOD_DESCRIPTOR,
+		BEFORE_METHOD_ATTRIBUTES_COUNT,
+		BEFORE_METHOD_ATTRIBUTE_NAME,
+		BEFORE_METHOD_ATTRIBUTE_LENGTH,
+		IN_METHOD_ATTRIBUTE_BYTES,
+		BEFORE_ATTRIBUTES_COUNT,
+		BEFORE_ATTRIBUTE_NAME,
+		BEFORE_ATTRIBUTE_LENGTH,
+		IN_ATTRIBUTE_BYTES,
+		AFTER_EVERYTHING;
 
 		State next;
 
@@ -61,6 +73,9 @@ public class ClassFileParser {
 			BEFORE_CPOOL_FIELDREF_CLASS.next = BEFORE_CPOOL_FIELDREF_NAME_AND_TYPE;
 			BEFORE_CPOOL_METHODREF_CLASS.next = BEFORE_CPOOL_METHODREF_NAME_AND_TYPE;
 			BEFORE_CPOOL_INTERFACE_METHODREF_CLASS.next = BEFORE_CPOOL_INTERFACE_METHODREF_NAME_AND_TYPE;
+			BEFORE_FIELD_ATTRIBUTE_LENGTH.next = IN_FIELD_ATTRIBUTE_BYTES;
+			BEFORE_METHOD_ATTRIBUTE_LENGTH.next = IN_METHOD_ATTRIBUTE_BYTES;
+			BEFORE_ATTRIBUTE_LENGTH.next = IN_ATTRIBUTE_BYTES;
 		}
 
 	}
@@ -493,7 +508,45 @@ public class ClassFileParser {
 				expectInt();
 				break;
 			case BEFORE_METHODS_COUNT:
-				//TODO
+				memberCount = s & 0xFFFF;
+				sink.beginMethods(memberCount);
+				nextMethod();
+				break;
+			case BEFORE_METHOD_ACCESS_FLAGS:
+				short0 = s;
+				state = State.BEFORE_METHOD_NAME;
+				expectShort();
+				break;
+			case BEFORE_METHOD_NAME:
+				short1 = s;
+				state = State.BEFORE_METHOD_DESCRIPTOR;
+				expectShort();
+				break;
+			case BEFORE_METHOD_DESCRIPTOR:
+				sink.beginMethod(short0 & 0xFFFF, short1 & 0xFFFF, s & 0xFFFF);
+				state = State.BEFORE_METHOD_ATTRIBUTES_COUNT;
+				expectShort();
+				break;
+			case BEFORE_METHOD_ATTRIBUTES_COUNT:
+				attributeCount = s & 0xFFFF;
+				sink.beginAttributes(attributeCount);
+				nextMethodAttribute();
+				break;
+			case BEFORE_METHOD_ATTRIBUTE_NAME:
+				short0 = s;
+				state = State.BEFORE_METHOD_ATTRIBUTE_LENGTH;
+				expectInt();
+				break;
+			case BEFORE_ATTRIBUTES_COUNT:
+				attributeCount = s & 0xFFFF;
+				sink.beginAttributes(attributeCount);
+				nextAttribute();
+				break;
+			case BEFORE_ATTRIBUTE_NAME:
+				short0 = s;
+				state = State.BEFORE_ATTRIBUTE_LENGTH;
+				expectInt();
+				break;
 			default:
 				throw new Doom("Received short in state " + state.name());
 		}
@@ -516,10 +569,12 @@ public class ClassFileParser {
 				nextPoolConstant();
 				break;
 			case BEFORE_FIELD_ATTRIBUTE_LENGTH:
+			case BEFORE_METHOD_ATTRIBUTE_LENGTH:
+			case BEFORE_ATTRIBUTE_LENGTH:
 				{
 					long length = (long)i & 0xFFFFFFFFL;
 					sink.beginAttribute(short0 & 0xFFFF, length);
-					state = State.IN_FIELD_ATTRIBUTE_BYTES;
+					state = state.next;
 					expectBytes(length);
 				}
 				break;
@@ -551,7 +606,26 @@ public class ClassFileParser {
 			case IN_FIELD_ATTRIBUTE_BYTES:
 				if(length == 0) {
 					sink.endAttribute();
+					--attributeCount;
 					nextFieldAttribute();
+				}
+				else
+					sink.attributeBytes(buffer, offset, length);
+				break;
+			case IN_METHOD_ATTRIBUTE_BYTES:
+				if(length == 0) {
+					sink.endAttribute();
+					--attributeCount;
+					nextMethodAttribute();
+				}
+				else
+					sink.attributeBytes(buffer, offset, length);
+				break;
+			case IN_ATTRIBUTE_BYTES:
+				if(length == 0) {
+					sink.endAttribute();
+					--attributeCount;
+					nextAttribute();
 				}
 				else
 					sink.attributeBytes(buffer, offset, length);
@@ -647,14 +721,55 @@ public class ClassFileParser {
 	}
 
 	private void nextFieldAttribute() throws IOException, ClassFileFormatException {
-		if(memberCount == 0) {
+		if(attributeCount == 0) {
 			sink.endAttributes();
+			--memberCount;
 			nextField();
 		}
 		else {
 			state = State.BEFORE_FIELD_ATTRIBUTE_NAME;
 			expectShort();
 		}
+	}
+
+	private void nextMethod() throws IOException, ClassFileFormatException {
+		if(memberCount == 0) {
+			sink.endMethods();
+			state = State.BEFORE_ATTRIBUTES_COUNT;
+			expectShort();
+		}
+		else {
+			state = State.BEFORE_METHOD_ACCESS_FLAGS;
+			expectShort();
+		}
+	}
+
+	private void nextMethodAttribute() throws IOException, ClassFileFormatException {
+		if(attributeCount == 0) {
+			sink.endAttributes();
+			--memberCount;
+			nextMethod();
+		}
+		else {
+			state = State.BEFORE_METHOD_ATTRIBUTE_NAME;
+			expectShort();
+		}
+	}
+
+	private void nextAttribute() throws IOException, ClassFileFormatException {
+		if(attributeCount == 0) {
+			sink.endAttributes();
+			state = State.AFTER_EVERYTHING;
+		}
+		else {
+			state = State.BEFORE_ATTRIBUTE_NAME;
+			expectShort();
+		}
+	}
+
+	public void endBytes() throws PrematureEndOfStreamClassFileFormatException {
+		if(state != State.AFTER_EVERYTHING)
+			throw new PrematureEndOfStreamClassFileFormatException();
 	}
 
 	private static short decodeShort(byte[] buffer, int offset) {
