@@ -169,7 +169,7 @@ public class ClassFileParser {
 		if(offset < 0)
 			throw new IllegalArgumentException("Offset cannot be negative: " + offset);
 		int end = offset + length;
-		if(end >= buffer.length)
+		if(end > buffer.length)
 			throw new IllegalArgumentException("End of slice extends beyond end of buffer: " + end
 					+ " >= " + buffer.length);
 		try {
