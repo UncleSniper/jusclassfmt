@@ -587,10 +587,12 @@ public class ClassFileParser {
 		switch(state) {
 			case BEFORE_CPOOL_LONG_VALUE:
 				sink.constantLong(l);
+				reservePoolConstant();
 				nextPoolConstant();
 				break;
 			case BEFORE_CPOOL_DOUBLE_VALUE:
 				sink.constantDouble(Double.longBitsToDouble(l));
+				reservePoolConstant();
 				nextPoolConstant();
 				break;
 			default:
@@ -683,6 +685,12 @@ public class ClassFileParser {
 		}
 	}
 
+	private void reservePoolConstant() throws ReservedConstantPoolEntryAfterEndOfPoolClassFileFormatException {
+		if(memberCount == 0)
+			throw new ReservedConstantPoolEntryAfterEndOfPoolClassFileFormatException();
+		--memberCount;
+	}
+
 	private void nextPoolConstant() throws IOException, ClassFileFormatException {
 		--memberCount;
 		if(memberCount == 0) {
@@ -724,6 +732,7 @@ public class ClassFileParser {
 		if(attributeCount == 0) {
 			sink.endAttributes();
 			--memberCount;
+			sink.endField();
 			nextField();
 		}
 		else {
@@ -748,6 +757,7 @@ public class ClassFileParser {
 		if(attributeCount == 0) {
 			sink.endAttributes();
 			--memberCount;
+			sink.endMethod();
 			nextMethod();
 		}
 		else {
